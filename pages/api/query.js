@@ -1,4 +1,12 @@
 import axios from 'axios';
+import formidable from 'formidable';
+
+// Disable the default bodyParser to handle form data
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -6,11 +14,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Create FormData to forward to the backend
-    const formData = new FormData();
+    // Use formidable to parse the form data
+    const form = formidable({});
     
-    // Extract data from request body
-    const { file_path, query } = req.body;
+    const [fields] = await new Promise((resolve, reject) => {
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        resolve([fields, files]);
+      });
+    });
+    
+    // Extract the file_path and query from fields
+    const file_path = fields.file_path?.[0] || fields.file_path;
+    const query = fields.query?.[0] || fields.query;
     
     if (!file_path || !query) {
       return res.status(400).json({ 
@@ -18,10 +34,12 @@ export default async function handler(req, res) {
       });
     }
     
+    // Create a new FormData for the backend request
+    const formData = new FormData();
     formData.append('file_path', file_path);
     formData.append('query', query);
     
-    // Make request to FastAPI backend
+    // Forward the request to the FastAPI backend
     const response = await axios.post('http://localhost:8000/api/query', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
@@ -32,7 +50,6 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('Error querying data:', error);
     
-    // Forward error details from the backend
     if (error.response) {
       return res.status(error.response.status).json({
         error: error.response.data.detail || 'Query processing failed'

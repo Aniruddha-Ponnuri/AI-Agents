@@ -15,20 +15,23 @@ export default function QueryInterface({ fileData }) {
     setError(null);
     
     try {
-      // Instead of FormData, use a regular object for Next.js API routes
-      const requestData = {
-        file_path: fileData.file_path,
-        query: query.trim()
-      };
+      // Create FormData for the API
+      const formData = new FormData();
+      formData.append('file_path', fileData.file_path);
+      formData.append('query', query.trim());
       
-      const response = await axios.post('/api/query', requestData);
+      const response = await axios.post('/api/query', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       
+      console.log('Query response:', response.data);
       setResult(response.data.result);
     } catch (err) {
       console.error('Error querying data:', err);
       
-      // Improved error handling with specific messages
-      if (err.response && err.response.data && err.response.data.error) {
+      if (err.response?.data?.error) {
         setError(err.response.data.error);
       } else {
         setError('Error processing your query. Please try again.');
@@ -41,6 +44,33 @@ export default function QueryInterface({ fileData }) {
   if (!fileData) {
     return null;
   }
+
+  // Function to extract answer from different response formats
+  const extractAnswer = (result) => {
+    if (!result) return null;
+    
+    // Case 1: Simple answer property
+    if (result.answer) return result.answer;
+    
+    // Case 2: CrewAI format with tasks_output
+    if (result.tasks_output) {
+      const dataAnalystTask = result.tasks_output.find(task => 
+        task.agent === "Data Analyst" || task.description?.includes("query")
+      );
+      
+      if (dataAnalystTask) {
+        // Try to extract Final Answer section
+        if (dataAnalystTask.raw) {
+          const match = dataAnalystTask.raw.match(/## Final Answer:\s*([\s\S]*)/);
+          if (match) return match[1].trim();
+          return dataAnalystTask.raw;
+        }
+      }
+    }
+    
+    // Case 3: Raw JSON response
+    return typeof result === 'object' ? JSON.stringify(result, null, 2) : result;
+  };
 
   return (
     <div className="mt-10 border-t pt-8">
@@ -75,7 +105,9 @@ export default function QueryInterface({ fileData }) {
       {result && (
         <div className="bg-gray-50 border rounded-lg p-6">
           <h3 className="text-lg font-semibold mb-3">Answer:</h3>
-          <p className="whitespace-pre-line">{result.answer}</p>
+          <div className="whitespace-pre-line prose max-w-none">
+            {extractAnswer(result)}
+          </div>
           
           {result.visualization && (
             <div className="mt-4">

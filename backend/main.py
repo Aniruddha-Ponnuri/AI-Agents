@@ -4,7 +4,8 @@ from fastapi.staticfiles import StaticFiles
 import os
 import shutil
 from typing import Optional
-
+import logging
+import traceback
 from agents import process_data_file, query_data_file
 
 app = FastAPI()
@@ -26,6 +27,11 @@ for dir_path in ["public", "public/uploads", "public/visualizations"]:
 
 # Mount static files directory
 app.mount("/static", StaticFiles(directory="public"), name="static")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("data_agents")
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -70,32 +76,49 @@ async def query_endpoint(file_path: str = Form(...), query: str = Form(...)):
     Endpoint to query data using natural language
     """
     try:
-        # Validate inputs
-        if not file_path or not os.path.exists(file_path):
-            raise HTTPException(
-                status_code=400, 
-                detail="Invalid file path or file does not exist"
-            )
-        
-        if not query.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Query cannot be empty"
-            )
-        
         # Use your existing query_data_file function
         result = query_data_file(file_path, query)
         
-        return {
+        # Handle the result based on its structure
+        response = {
             "status": "success",
-            "query": query,
-            "result": result
+            "query": query
         }
+        
+        # Process the result based on its structure
+        if isinstance(result, dict):
+            # Check if it has direct answer property
+            if "answer" in result:
+                response["result"] = result
+            # Check if it's a CrewAI tasks output format
+            elif "tasks_output" in result:
+                data_analyst_output = None
+                for task in result["tasks_output"]:
+                    if task.get("agent") == "Data Analyst":
+                        data_analyst_output = task
+                        break
+                
+                if data_analyst_output:
+                    # Extract the answer from Data Analyst output
+                    response["result"] = {
+                        "answer": data_analyst_output.get("raw", ""),
+                        "tasks_output": result["tasks_output"],
+                        "raw": result
+                    }
+                else:
+                    response["result"] = result
+            else:
+                response["result"] = result
+        else:
+            # For string or other primitive responses
+            response["result"] = {"answer": str(result)}
+        
+        return response
     except Exception as e:
-        # Return proper error responses
-        if isinstance(e, HTTPException):
-            raise e
+        logger.error(f"Error in query_endpoint: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 
