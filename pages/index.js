@@ -1,8 +1,8 @@
 import { useState } from "react";
 import Head from "next/head";
 import FileUploader from "../components/FileUploader";
-import DataVisualizer from "../components/DataVisualizer";
 import QueryInterface from "../components/QueryInterface";
+import DataVisualizationGallery from '../components/DataVisualizationGallery';
 
 export default function Home() {
   const [processedFileData, setProcessedFileData] = useState(null);
@@ -63,7 +63,10 @@ export default function Home() {
             </div>
           )}
 
-          <DataVisualizer fileData={processedFileData} />
+          {/* Replace DataVisualizer with DataVisualizationGallery */}
+          {processedFileData && (
+            <DataVisualizationGallery fileName={processedFileData.filename} />
+          )}
 
           <QueryInterface fileData={processedFileData} />
         </div>

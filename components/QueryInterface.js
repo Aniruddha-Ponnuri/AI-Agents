@@ -15,15 +15,24 @@ export default function QueryInterface({ fileData }) {
     setError(null);
     
     try {
-      const response = await axios.post('/api/query', {
+      // Instead of FormData, use a regular object for Next.js API routes
+      const requestData = {
         file_path: fileData.file_path,
         query: query.trim()
-      });
+      };
+      
+      const response = await axios.post('/api/query', requestData);
       
       setResult(response.data.result);
     } catch (err) {
       console.error('Error querying data:', err);
-      setError('Error processing your query. Please try again.');
+      
+      // Improved error handling with specific messages
+      if (err.response && err.response.data && err.response.data.error) {
+        setError(err.response.data.error);
+      } else {
+        setError('Error processing your query. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -43,7 +52,7 @@ export default function QueryInterface({ fileData }) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="E.g., What's the distribution of sales by region?"
+            placeholder="E.g., What's the distribution of values in Column 1?"
             className="flex-grow p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             disabled={loading}
           />
@@ -72,7 +81,7 @@ export default function QueryInterface({ fileData }) {
             <div className="mt-4">
               <h4 className="text-md font-medium mb-2">Visualization:</h4>
               <img 
-                src={result.visualization} 
+                src={`http://localhost:8000${result.visualization}`} 
                 alt="Query visualization" 
                 className="max-w-full h-auto border rounded" 
               />
