@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import axios from 'axios';
+import { FaPaperPlane } from 'react-icons/fa';
 
 export default function QueryInterface({ fileData }) {
   const [query, setQuery] = useState('');
-  const [result, setResult] = useState(null);
+  const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -15,11 +16,15 @@ export default function QueryInterface({ fileData }) {
     setError(null);
     
     try {
-      // Create FormData for the API
+      // Add user query to the results
+      setResults(prev => [...prev, { type: 'user', content: query }]);
+      
+      // Create FormData for the API - THIS IS THE KEY FIX
       const formData = new FormData();
       formData.append('file_path', fileData.file_path);
       formData.append('query', query.trim());
       
+      // Send with proper headers
       const response = await axios.post('/api/query', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -27,100 +32,124 @@ export default function QueryInterface({ fileData }) {
       });
       
       console.log('Query response:', response.data);
-      setResult(response.data.result);
+      
+      // Extract the answer
+      const answer = extractAnswer(response.data.result);
+      
+      // Add AI response to the results
+      setResults(prev => [...prev, { 
+        type: 'ai', 
+        content: answer,
+        visualization: response.data.result?.visualization || null
+      }]);
+      
+      // Clear the input
+      setQuery('');
     } catch (err) {
       console.error('Error querying data:', err);
+      setError('Error processing your query. Please try again.');
       
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else {
-        setError('Error processing your query. Please try again.');
-      }
+      // Add error message to chat
+      setResults(prev => [...prev, { 
+        type: 'ai', 
+        content: `Error: ${err.response?.data?.error || 'Could not process your query. Please try again.'}`,
+        isError: true
+      }]);
     } finally {
       setLoading(false);
     }
   };
 
-  if (!fileData) {
-    return null;
-  }
-
   // Function to extract answer from different response formats
   const extractAnswer = (result) => {
-    if (!result) return null;
+    if (!result) return "Sorry, I couldn't process your query.";
     
-    // Case 1: Simple answer property
+    if (typeof result === 'string') return result;
     if (result.answer) return result.answer;
     
-    // Case 2: CrewAI format with tasks_output
     if (result.tasks_output) {
-      const dataAnalystTask = result.tasks_output.find(task => 
-        task.agent === "Data Analyst" || task.description?.includes("query")
+      const task = result.tasks_output.find(t => 
+        t.agent === "Data Analyst" || t.description?.includes("query")
       );
-      
-      if (dataAnalystTask) {
-        // Try to extract Final Answer section
-        if (dataAnalystTask.raw) {
-          const match = dataAnalystTask.raw.match(/## Final Answer:\s*([\s\S]*)/);
-          if (match) return match[1].trim();
-          return dataAnalystTask.raw;
-        }
+      if (task?.raw) {
+        const match = task.raw.match(/## Final Answer:\s*([\s\S]*)/);
+        if (match) return match[1].trim();
+        return task.raw;
       }
     }
     
-    // Case 3: Raw JSON response
-    return typeof result === 'object' ? JSON.stringify(result, null, 2) : result;
+    return JSON.stringify(result);
   };
 
+  if (!fileData) return null;
+
   return (
-    <div className="mt-10 border-t pt-8">
-      <h2 className="text-2xl font-bold mb-4">Ask Questions About Your Data</h2>
+    <div>
+      {/* Chat Messages */}
+      <div className="chat-messages space-y-4 mb-4 max-h-[300px] overflow-y-auto">
+        {results.map((result, index) => (
+          <div key={index} className={`flex ${result.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] p-3 rounded-lg ${
+              result.type === 'user' 
+                ? 'bg-blue-100 text-blue-900' 
+                : result.isError
+                  ? 'bg-red-100 text-red-900'
+                  : 'bg-gray-100 text-gray-900'
+            }`}>
+              <div className="whitespace-pre-line">{result.content}</div>
+              
+              {result.visualization && (
+                <div className="mt-3">
+                  <img 
+                    src={`http://localhost:8000${result.visualization}`} 
+                    alt="Data visualization" 
+                    className="max-w-full rounded border border-gray-200" 
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        
+        {loading && (
+          <div className="flex justify-start">
+            <div className="bg-gray-100 p-3 rounded-lg">
+              <div className="flex space-x-2">
+                <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"></div>
+                <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce delay-75"></div>
+                <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce delay-150"></div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
       
-      <form onSubmit={handleSubmit} className="mb-6">
-        <div className="flex gap-2">
+      {/* Chat Input */}
+      <form onSubmit={handleSubmit} className="mt-2">
+        <div className="chat-input-container">
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="E.g., What's the distribution of values in Column 1?"
-            className="flex-grow p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Ask a question..."
+            className="chat-input"
             disabled={loading}
           />
-          <button
-            type="submit"
+          <button 
+            type="submit" 
+            className="chat-button"
             disabled={loading || !query.trim()}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300"
           >
-            {loading ? 'Processing...' : 'Ask'}
+            <FaPaperPlane />
           </button>
         </div>
-      </form>
-      
-      {error && (
-        <div className="p-3 mb-4 bg-red-100 border border-red-200 text-red-700 rounded">
-          {error}
-        </div>
-      )}
-      
-      {result && (
-        <div className="bg-gray-50 border rounded-lg p-6">
-          <h3 className="text-lg font-semibold mb-3">Answer:</h3>
-          <div className="whitespace-pre-line prose max-w-none">
-            {extractAnswer(result)}
+        
+        {error && (
+          <div className="mt-2 text-sm text-red-600">
+            {error}
           </div>
-          
-          {result.visualization && (
-            <div className="mt-4">
-              <h4 className="text-md font-medium mb-2">Visualization:</h4>
-              <img 
-                src={`http://localhost:8000${result.visualization}`} 
-                alt="Query visualization" 
-                className="max-w-full h-auto border rounded" 
-              />
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </form>
     </div>
   );
 }

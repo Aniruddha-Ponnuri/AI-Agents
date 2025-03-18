@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import '../styles/globals.css';
+import '../styles/layout.css';
 
 function MyApp({ Component, pageProps }) {
   // Add this to prevent hydration errors with SSR

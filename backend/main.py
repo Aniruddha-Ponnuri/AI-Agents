@@ -72,6 +72,7 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.post("/api/query")
 async def query_endpoint(file_path: str = Form(...), query: str = Form(...)):
+    print(f"Received file_path: {file_path}") 
     """
     Endpoint to query data using natural language
     """

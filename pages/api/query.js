@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Use formidable to parse the form data
+    // Parse the incoming request using formidable
     const form = formidable({});
     
     const [fields] = await new Promise((resolve, reject) => {
