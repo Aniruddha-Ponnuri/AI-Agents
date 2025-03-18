@@ -43,26 +43,27 @@ async def upload_file(file: UploadFile = File(...)):
         # Process the file with CrewAI
         result = process_data_file(file_path)
         
-        # Handle result properly for frontend display
-        if isinstance(result, dict):
-            # Format result for frontend
-            formatted_result = {
-                "status": "success", 
-                "filename": file.filename,
-                "file_path": file_path,
-                "summary": str(result)  # Convert complex objects to string
-            }
+        # Extract the actual data summary
+        data_summary = ""
+        if isinstance(result, dict) and 'tasks_output' in result:
+            # Find the data reader task output
+            for task in result['tasks_output']:
+                if task.get('agent') == 'Data Reader' and task.get('raw'):
+                    data_summary = task['raw']
+                    break
         else:
-            formatted_result = {
-                "status": "success", 
-                "filename": file.filename,
-                "file_path": file_path,
-                "summary": result
-            }
+            # If result is not in expected format, use it directly
+            data_summary = str(result)
         
-        return formatted_result
+        return {
+            "status": "success", 
+            "filename": file.filename,
+            "file_path": file_path,
+            "summary": data_summary
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.post("/api/query")
@@ -106,9 +107,7 @@ async def list_visualizations(dataset_name: str):
     Get a list of all visualization files for a specific dataset
     """
     try:
-        # Extract base name without extension if the dataset_name includes an extension
-        base_name = dataset_name.split('.')[0]
-        viz_dir = os.path.join("public/visualizations", base_name)
+        viz_dir = os.path.join("public/visualizations", dataset_name)
         
         if not os.path.exists(viz_dir):
             return {"visualizations": []}
@@ -118,17 +117,45 @@ async def list_visualizations(dataset_name: str):
         for file in os.listdir(viz_dir):
             if file.endswith(('.png', '.jpg', '.jpeg')):
                 # Format the path for frontend use
-                file_path = f"/static/visualizations/{base_name}/{file}"
-                title = get_visualization_title(file)
+                file_path = f"/static/visualizations/{dataset_name}/{file}"
+                
+                # Extract visualization info from filename
+                if file.startswith('dist_'):
+                    col_name = file.replace('dist_', '').replace('.png', '')
+                    title = f"Distribution of {format_column_name(col_name)}"
+                    viz_type = "distribution"
+                    column = col_name
+                elif file.startswith('count_'):
+                    col_name = file.replace('count_', '').replace('.png', '')
+                    title = f"Count of Values in {format_column_name(col_name)}"
+                    viz_type = "categorical"
+                    column = col_name
+                elif 'correlation_heatmap' in file:
+                    title = "Correlation Heatmap"
+                    viz_type = "correlation"
+                    column = None
+                else:
+                    title = file.replace('.png', '').replace('_', ' ').title()
+                    viz_type = "other"
+                    column = None
+                
                 viz_files.append({
                     "path": file_path,
                     "title": title,
+                    "type": viz_type,
+                    "column": column,
                     "filename": file
                 })
         
         return {"visualizations": viz_files}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def format_column_name(column_name: str) -> str:
+    """Format a column name for display"""
+    words = column_name.replace('_', ' ').split()
+    return ' '.join(word.capitalize() for word in words)
+
 
 def get_visualization_title(filename: str) -> str:
     """Generate a readable title from a visualization filename"""

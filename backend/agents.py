@@ -77,63 +77,66 @@ def rate_limit():
 
 @tool("Read and parse uploaded data file")
 def read_data_file(file_path: str) -> str:
-    """
-    Reads and parses various file formats including CSV, Excel, and JSON.
-    Returns a summary of the data and saves a serialized version for further processing.
-    
-    Args:
-        file_path: Path to the uploaded file
-        
-    Returns:
-        str: Summary of the parsed data
-    """
+    """Reads and parses data files, preserving original column names."""
     try:
         logger.info(f"Starting to parse file: {file_path}")
-        rate_limit()  # Add rate limiting
+        rate_limit()
         
-        # Check if file exists
         if not os.path.exists(file_path):
-            logger.error(f"File not found at path: {file_path}")
+            logger.error(f"File not found: {file_path}")
             return f"Error: File not found at path: {file_path}"
             
-        # Determine file type by extension
         _, ext = os.path.splitext(file_path)
         ext = ext.lower()
         
-        logger.info(f"Detected file format: {ext}")
+        # Store column mapping for visualization 
+        column_metadata = {}
         
-        # Read file based on extension
         if ext == '.csv':
-            # Try to determine if there's a header row
+            # Try to intelligently detect headers
             try:
-                df = pd.read_csv(file_path, header=None)
+                # First try with pandas auto-detection
+                df = pd.read_csv(file_path)
+                logger.info(f"CSV file parsed with automatic header detection")
                 
-                # Check if first row might be header
-                first_row = df.iloc[0]
-                if all(isinstance(x, str) for x in first_row):
-                    df = pd.read_csv(file_path)
-                else:
-                    # If no header, provide column names
-                    column_names = [f'Column_{i+1}' for i in range(df.shape[1])]
-                    df = pd.read_csv(file_path, header=None, names=column_names)
-            except Exception as e:
-                logger.error(f"Error parsing CSV file: {str(e)}")
-                # Try with no header as fallback
-                column_names = [f'Column_{i+1}' for i in range(5)]  # Assume at least 5 columns
-                df = pd.read_csv(file_path, header=None, names=column_names)
+                # Store original column names
+                for i, col_name in enumerate(df.columns):
+                    column_metadata[f"col_{i}"] = str(col_name)
+                
+            except Exception as csv_error:
+                logger.warning(f"Error with automatic header detection: {str(csv_error)}")
+                # Try again with explicit no header
+                df = pd.read_csv(file_path, header=None)
+                # Generate default column names
+                column_names = [f'Column_{i+1}' for i in range(df.shape[1])]
+                df.columns = column_names
+                
+                # Store column mapping
+                for i, col_name in enumerate(column_names):
+                    column_metadata[f"col_{i}"] = col_name
                 
         elif ext in ['.xlsx', '.xls']:
             df = pd.read_excel(file_path)
+            # Store original column names
+            for i, col_name in enumerate(df.columns):
+                column_metadata[f"col_{i}"] = str(col_name)
+                
         elif ext == '.json':
             df = pd.read_json(file_path)
+            # Store original column names
+            for i, col_name in enumerate(df.columns):
+                column_metadata[f"col_{i}"] = str(col_name)
         else:
-            logger.warning(f"Unsupported file format: {ext}")
             return f"Unsupported file format: {ext}"
         
         # Save DataFrame as pickle for later use
         pickle_path = f"{file_path}.pkl"
         df.to_pickle(pickle_path)
-        logger.info(f"DataFrame saved to: {pickle_path}")
+        
+        # Save column metadata
+        metadata_path = f"{file_path}.meta.json"
+        with open(metadata_path, 'w') as f:
+            json.dump(column_metadata, f)
         
         # Generate summary
         summary = f"File successfully parsed. Found {df.shape[0]} rows and {df.shape[1]} columns.\n\n"
@@ -151,7 +154,6 @@ def read_data_file(file_path: str) -> str:
         else:
             summary += "No numeric columns found for statistics."
             
-        logger.info(f"Successfully parsed file with {df.shape[0]} rows and {df.shape[1]} columns")
         return summary
         
     except Exception as e:
@@ -159,15 +161,13 @@ def read_data_file(file_path: str) -> str:
         logger.error(traceback.format_exc())
         return f"Error parsing file: {str(e)}"
 
+
 @tool("Generate exploratory visualizations")
 def generate_visualizations(file_path: str) -> List[Dict[str, str]]:
-    """
-    Generates a comprehensive set of visualizations based on the data file.
-    Returns metadata about each visualization.
-    """
+    """Generates visualizations using actual column names from the dataset."""
     try:
         logger.info(f"Starting visualization generation for: {file_path}")
-        rate_limit()  # Add rate limiting
+        rate_limit()
         
         # Load the data
         pickle_path = f"{file_path}.pkl"
@@ -176,7 +176,16 @@ def generate_visualizations(file_path: str) -> List[Dict[str, str]]:
             return [{"error": "Processed data file not found. Please parse the file first."}]
             
         df = pd.read_pickle(pickle_path)
-        logger.info(f"Loaded data from pickle with shape: {df.shape}")
+        
+        # Load column metadata if available
+        metadata_path = f"{file_path}.meta.json"
+        column_readable_names = {}
+        if os.path.exists(metadata_path):
+            try:
+                with open(metadata_path, 'r') as f:
+                    column_readable_names = json.load(f)
+            except:
+                logger.warning("Could not load column metadata, using raw column names")
         
         # Extract dataset name from file path
         dataset_name = os.path.basename(file_path).split('.')[0]
@@ -184,75 +193,79 @@ def generate_visualizations(file_path: str) -> List[Dict[str, str]]:
         # Create directory for visualizations
         viz_dir = os.path.join('public', 'visualizations', dataset_name)
         os.makedirs(viz_dir, exist_ok=True)
-        logger.info(f"Using visualization directory: {viz_dir}")
         
         visualization_metadata = []
         
         # 1. Distribution of numeric columns
-        logger.info("Generating distribution visualizations for numeric columns")
-        numeric_cols = df.select_dtypes(include=['number']).columns[:5]  # Limit to first 5 for simplicity
+        numeric_cols = df.select_dtypes(include=['number']).columns[:5]
         if len(numeric_cols) > 0:
             for col in numeric_cols:
                 try:
                     plt.figure(figsize=(10, 6))
                     sns.histplot(df[col].dropna(), kde=True)
-                    plt.title(f'Distribution of {col}')
+                    
+                    # Use a clean display name for the column in the title
+                    display_name = get_display_name(col, column_readable_names)
+                    plt.title(f'Distribution of {display_name}')
                     plt.tight_layout()
                     
-                    filename = f'dist_{col}.png'
+                    # Use a URL-safe filename
+                    safe_col_name = str(col).replace(' ', '_').replace('/', '_').lower()
+                    filename = f'dist_{safe_col_name}.png'
                     chart_path = os.path.join(viz_dir, filename)
                     plt.savefig(chart_path)
                     plt.close()
                     
-                    # Store metadata
                     visualization_metadata.append({
                         "path": f'/static/visualizations/{dataset_name}/{filename}',
-                        "title": f'Distribution of {col}',
+                        "title": f'Distribution of {display_name}',
                         "type": "distribution",
                         "column": str(col)
                     })
-                    logger.info(f"Created distribution visualization for {col}")
-                    rate_limit()  # Add rate limiting between visualizations
                 except Exception as e:
                     logger.error(f"Error generating distribution for {col}: {str(e)}")
         
-        # 2. Categorical data counts
-        logger.info("Generating categorical visualizations")
-        categorical_cols = df.select_dtypes(include=['object']).columns[:3]
+        # 2. Categorical data counts (similar modifications for categorical columns)
+        categorical_cols = df.select_dtypes(include=['object', 'category']).columns[:3]
         if len(categorical_cols) > 0:
             for col in categorical_cols:
                 try:
                     plt.figure(figsize=(10, 6))
-                    value_counts = df[col].value_counts().head(10)  # Top 10 categories
+                    value_counts = df[col].value_counts().head(10)
                     sns.barplot(x=value_counts.index, y=value_counts.values)
-                    plt.title(f'Count of Top 10 Values in {col}')
+                    
+                    display_name = get_display_name(col, column_readable_names)
+                    plt.title(f'Count of Values in {display_name}')
                     plt.xticks(rotation=45)
                     plt.tight_layout()
                     
-                    filename = f'count_{col}.png'
+                    safe_col_name = str(col).replace(' ', '_').replace('/', '_').lower()
+                    filename = f'count_{safe_col_name}.png'
                     chart_path = os.path.join(viz_dir, filename)
                     plt.savefig(chart_path)
                     plt.close()
                     
-                    # Store metadata
                     visualization_metadata.append({
                         "path": f'/static/visualizations/{dataset_name}/{filename}',
-                        "title": f'Count of Values in {col}',
+                        "title": f'Count of Values in {display_name}',
                         "type": "categorical",
                         "column": str(col)
                     })
-                    logger.info(f"Created categorical visualization for {col}")
-                    rate_limit()  # Add rate limiting between visualizations
                 except Exception as e:
                     logger.error(f"Error generating categorical chart for {col}: {str(e)}")
         
-        # 3. If we have at least two numeric columns, create a correlation heatmap
+        # 3. Correlation heatmap (similar modifications)
         if len(numeric_cols) >= 2:
             try:
-                logger.info("Generating correlation heatmap")
                 plt.figure(figsize=(10, 8))
                 corr_matrix = df[numeric_cols].corr()
                 sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0)
+                
+                # Use human-readable column labels for better understanding
+                display_labels = [get_display_name(col, column_readable_names) for col in numeric_cols]
+                plt.xticks(ticks=range(len(numeric_cols)), labels=display_labels, rotation=45)
+                plt.yticks(ticks=range(len(numeric_cols)), labels=display_labels, rotation=0)
+                
                 plt.title('Correlation Heatmap')
                 plt.tight_layout()
                 
@@ -261,24 +274,53 @@ def generate_visualizations(file_path: str) -> List[Dict[str, str]]:
                 plt.savefig(chart_path)
                 plt.close()
                 
-                # Store metadata
                 visualization_metadata.append({
                     "path": f'/static/visualizations/{dataset_name}/{filename}',
                     "title": 'Correlation Heatmap',
                     "type": "correlation",
                     "columns": [str(col) for col in numeric_cols.tolist()]
                 })
-                logger.info("Created correlation heatmap")
             except Exception as e:
                 logger.error(f"Error generating correlation heatmap: {str(e)}")
             
-        logger.info(f"Generated {len(visualization_metadata)} visualizations")
         return visualization_metadata
         
     except Exception as e:
         logger.error(f"Error generating visualizations: {str(e)}")
         logger.error(traceback.format_exc())
         return [{"error": f"Error generating visualizations: {str(e)}"}]
+
+# Helper function to get a clean display name for a column
+def get_display_name(column, metadata_dict=None):
+    """Get a human-readable display name for a column"""
+    if metadata_dict:
+        # Look for the column in metadata
+        for key, value in metadata_dict.items():
+            if str(column) == str(value):
+                return value
+    
+    # If not found in metadata or no metadata, clean up the column name
+    col_str = str(column)
+    
+    # Remove underscores and capitalize words
+    if '_' in col_str:
+        return ' '.join(word.capitalize() for word in col_str.split('_'))
+    
+    # Convert CamelCase to spaces
+    if any(c.isupper() for c in col_str) and not col_str.isupper():
+        import re
+        s1 = re.sub('(.)([A-Z][a-z]+)', r'\1 \2', col_str)
+        return re.sub('([a-z0-9])([A-Z])', r'\1 \2', s1)
+    
+    # If it's like "Column_1", make it more readable
+    if col_str.startswith(('Column_', 'column_')):
+        parts = col_str.split('_')
+        if len(parts) == 2 and parts[1].isdigit():
+            return f"Feature {parts[1]}"
+    
+    # Default: just return the original
+    return col_str
+
 
 @tool("Query data using natural language")
 def query_data(file_path: str, query: str) -> Dict:
@@ -505,7 +547,7 @@ def create_query_task(file_path, query):
         agent=data_analyst
     )
 
-# Function to create and run a data processing crew with telemetry disabled
+
 # Function to create and run a data processing crew with telemetry disabled
 def process_data_file(file_path: str) -> Union[str, Dict]:
     """
@@ -534,7 +576,7 @@ def process_data_file(file_path: str) -> Union[str, Dict]:
         ]
         
         # Updated Crew initialization with correct configuration structure
-        rew = Crew(
+        crew = Crew(
             agents=[data_reader, data_visualizer],
             tasks=tasks,
             process=Process.sequential,
@@ -554,7 +596,7 @@ def process_data_file(file_path: str) -> Union[str, Dict]:
             nonlocal result, error
             try:
                 # No config parameter here
-                result = Crew.kickoff()
+                result = crew.kickoff()
             except Exception as e:
                 error = str(e)
                 logger.error(f"Error in crew execution: {str(e)}")
@@ -611,12 +653,12 @@ def query_data_file(file_path: str, query: str) -> Dict:
             agents=[data_analyst],
             tasks=[task],
             verbose=True,
-            telemetry=False,   # Configuration moved here
-            max_iterations=3   # Configuration moved here
+            telemetry=False,   
+            max_iterations=3   
         )
         
         # No config parameter here
-        result = Crew.kickoff()
+        result = crew.kickoff()
         
         # Add the result to history if it's properly formatted
         if hasattr(result, 'answer'):

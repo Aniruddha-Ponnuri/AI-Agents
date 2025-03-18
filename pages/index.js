@@ -2,7 +2,7 @@ import { useState } from "react";
 import Head from "next/head";
 import FileUploader from "../components/FileUploader";
 import QueryInterface from "../components/QueryInterface";
-import DataVisualizationGallery from '../components/DataVisualizationGallery';
+import DataVisualizationGallery from "../components/DataVisualizationGallery";
 
 export default function Home() {
   const [processedFileData, setProcessedFileData] = useState(null);
@@ -51,13 +51,19 @@ export default function Home() {
               <h3 className="text-xl font-bold mb-2">Data Summary</h3>
               <div className="bg-gray-50 border rounded-lg p-4">
                 {typeof processedFileData.summary === "object" ? (
+                  // Extract data summary from complex object
                   <pre className="whitespace-pre-wrap overflow-auto">
-                    {JSON.stringify(processedFileData.summary, null, 2)}
+                    {(processedFileData.summary.tasks_output &&
+                      processedFileData.summary.tasks_output.find(
+                        (t) => t.agent === "Data Reader"
+                      )?.raw) ||
+                      JSON.stringify(processedFileData.summary, null, 2)}
                   </pre>
                 ) : (
-                  <div className="whitespace-pre-line">
+                  // Display simple string summary
+                  <pre className="whitespace-pre-line">
                     {processedFileData.summary}
-                  </div>
+                  </pre>
                 )}
               </div>
             </div>
