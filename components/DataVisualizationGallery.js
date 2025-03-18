@@ -38,29 +38,22 @@ export default function DataVisualizationGallery({ fileName }) {
     return <div>No visualizations available for this data.</div>;
   }
   
-    
   return (
-    <div className="mt-8">
-      <h2 className="text-2xl font-bold mb-4">Data Visualizations</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="visualizations-container">
+      <h2 className="text-xl font-semibold mb-4">Data Visualizations</h2>
+      <div className="visualization-grid">
         {visualizations.map((viz, index) => (
-          <div key={index} className="border rounded-lg overflow-hidden shadow-md">
-            <div className="p-3 bg-gray-50 border-b">
-              <h3 className="font-medium">
-                {/* Use the title from visualization metadata if available */}
-                {viz.title || getVisualizationTitle(viz.path)}
-              </h3>
-              {viz.column && (
-                <p className="text-sm text-gray-500">
-                  Column: {viz.column}
-                </p>
-              )}
+          <div key={index} className="visualization-card">
+            <div className="visualization-header">
+              {viz.title || getVisualizationTitle(viz.path)}
             </div>
-            <img 
-              src={`http://localhost:8000${viz.path}`} 
-              alt={viz.title || `Visualization ${index + 1}`}
-              className="w-full h-auto" 
-            />
+            <div className="visualization-body">
+              <img 
+                src={`http://localhost:8000${viz.path}`} 
+                alt={viz.title || `Visualization ${index + 1}`}
+                className="w-full h-auto" 
+              />
+            </div>
           </div>
         ))}
       </div>
