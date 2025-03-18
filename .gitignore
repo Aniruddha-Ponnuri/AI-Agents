@@ -44,3 +44,4 @@ next-env.d.ts
 backend/public
 backend/__pycache__
 backend/crewai
+.temp

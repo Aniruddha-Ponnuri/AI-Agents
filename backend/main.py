@@ -43,23 +43,21 @@ async def upload_file(file: UploadFile = File(...)):
         # Process the file with CrewAI
         result = process_data_file(file_path)
         
-        # Extract the actual data summary
-        data_summary = ""
-        if isinstance(result, dict) and 'tasks_output' in result:
-            # Find the data reader task output
-            for task in result['tasks_output']:
-                if task.get('agent') == 'Data Reader' and task.get('raw'):
-                    data_summary = task['raw']
-                    break
-        else:
-            # If result is not in expected format, use it directly
-            data_summary = str(result)
+        summary = ""
+        if isinstance(result, dict):
+            if 'summary' in result:
+                summary = result['summary']
+            elif 'tasks_output' in result:
+                for task in result['tasks_output']:
+                    if task.get('agent') == 'Data Reader':
+                        summary = task.get('raw', '')
+                        break
         
         return {
             "status": "success", 
             "filename": file.filename,
             "file_path": file_path,
-            "summary": data_summary
+            "summary": summary
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

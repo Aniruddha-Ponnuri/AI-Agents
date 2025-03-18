@@ -617,6 +617,19 @@ def process_data_file(file_path: str) -> Union[str, Dict]:
             _thread._async_raise(crew_thread.ident, SystemExit)
             return "Error: Processing timed out after 5 minutes"
         
+        if isinstance(result, dict) and 'tasks_output' in result:
+            for task in result['tasks_output']:
+                if task.get('agent') == 'Data Reader' and task.get('raw'):
+                # Parse the raw output to extract structured data
+                    summary = task.get('raw')
+                    # Return a structured result
+                    return {
+                        "status": "success",
+                        "summary": summary,
+                        "visualizations": result['tasks_output'][1]['raw'] if len(result['tasks_output']) > 1 else [],
+                        "raw_result": result  # Keep the raw result for debugging
+                    }
+    
         if error:
             return f"Error during processing: {error}"
         

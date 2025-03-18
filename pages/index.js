@@ -45,24 +45,17 @@ export default function Home() {
               </p>
             </div>
           )}
-
           {processedFileData && processedFileData.summary && (
             <div className="mt-6">
               <h3 className="text-xl font-bold mb-2">Data Summary</h3>
               <div className="bg-gray-50 border rounded-lg p-4">
-                {typeof processedFileData.summary === "object" ? (
-                  // Extract data summary from complex object
-                  <pre className="whitespace-pre-wrap overflow-auto">
-                    {(processedFileData.summary.tasks_output &&
-                      processedFileData.summary.tasks_output.find(
-                        (t) => t.agent === "Data Reader"
-                      )?.raw) ||
-                      JSON.stringify(processedFileData.summary, null, 2)}
-                  </pre>
-                ) : (
-                  // Display simple string summary
-                  <pre className="whitespace-pre-line">
+                {typeof processedFileData.summary === "string" ? (
+                  <div className="whitespace-pre-line">
                     {processedFileData.summary}
+                  </div>
+                ) : (
+                  <pre className="whitespace-pre-wrap overflow-auto">
+                    {JSON.stringify(processedFileData.summary, null, 2)}
                   </pre>
                 )}
               </div>
@@ -79,9 +72,7 @@ export default function Home() {
       </main>
 
       <footer className="mt-12 py-6 border-t">
-        <div className="container mx-auto px-4 text-center text-gray-500">
-          <p>Powered by CrewAI and Next.js</p>
-        </div>
+        <div className="container mx-auto px-4 text-center text-gray-500"></div>
       </footer>
     </div>
   );
