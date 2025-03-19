@@ -78,7 +78,7 @@
   
   .visualization-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(900px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(500px, 1fr)); /* Changed from 100vw to 300px */
     gap: 16px;
   }
   
@@ -87,8 +87,31 @@
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
   }
   
+  .visualization-card img {
+    width: 100%;
+    height: auto;
+    object-fit: contain; /* Ensures image maintains aspect ratio */
+    max-height: 300px; /* Limits maximum height */
+  }
+  
+  .visualization-header {
+    padding: 12px;
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-weight: 500;
+  }
+  
+  .visualization-body {
+    padding: 12px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
   .visualization-header {
     padding: 12px;
     background-color: #f9fafb;

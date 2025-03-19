@@ -72,7 +72,7 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.post("/api/query")
 async def query_endpoint(file_path: str = Form(...), query: str = Form(...)):
-    print(f"Received file_path: {file_path}") 
+    print(f"Received file_path: {file_path}")
     """
     Endpoint to query data using natural language
     """
@@ -83,7 +83,8 @@ async def query_endpoint(file_path: str = Form(...), query: str = Form(...)):
         # Handle the result based on its structure
         response = {
             "status": "success",
-            "query": query
+            "query": query,
+            "sender_type": "bot"  # Add explicit sender type
         }
         
         # Process the result based on its structure

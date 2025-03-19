@@ -98,17 +98,21 @@ export default function QueryInterface({ fileData }) {
       {/* Chat Messages */}
       <div className="chat-messages flex flex-col space-y-6 mb-4 overflow-y-auto p-4">
         {results.map((result, index) => (
-          <div key={index} className="w-full">
-            {/* Message bubble with sender alignment */}
-            <div className={`flex ${result.type === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`${result.type === "user" ? "user-bubble" : "bot-bubble"}`}>
+          <div key={index} className="message-wrapper w-full">
+            <div className={`flex ${result.type === "user" ? "justify-end" : "justify-start"} w-full`}>
+              <div 
+                className={`${result.type === "user" ? "user-bubble" : "bot-bubble"} 
+                           ${result.isError ? "error-bubble" : ""}`}
+              >
                 <div className="whitespace-pre-line">{result.content}</div>
                 
                 {result.visualization && (
                   <div className="mt-3">
-                    <img src={`http://localhost:8000${result.visualization}`} 
-                        alt="Data visualization" 
-                        className="max-w-full rounded border border-gray-200" />
+                    <img 
+                      src={`http://localhost:8000${result.visualization}`} 
+                      alt="Data visualization" 
+                      className="max-w-full rounded border border-gray-200" 
+                    />
                   </div>
                 )}
               </div>
